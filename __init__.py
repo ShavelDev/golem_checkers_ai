@@ -1,0 +1,1 @@
+from .checkers_types import Board
