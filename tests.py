@@ -88,3 +88,53 @@ for b in board.returnPossibleMoves():
     print(f"shape b: y:{len(b)} x:{(len(b[0]))}")
     
     print(Board(b).display_board())
+
+
+
+#test 7
+print("\n\ntest7\n")
+board = Board([
+                [ 0,  0,  0,  0,  0,  0,  0,  0],
+                [ 0,  0,  -1,  0,  0,  0,  0,  0],
+               [ 0,  0,  0,  0,  0,  0,  0,  0],
+                [ 0,  0,  0,  0,  0,  -1,  0,  -1],
+                [ 0,  0,  0,  0,  0,  0,  1,  0],
+               [ 0,  0,  0,  0,  0,  0,  0,  0],
+               [ 0,  0,  0,  -1,  0,  0,  0,  0],
+                [ 0,  0,  0,  0,  0,  0,  0,  0]
+            ])
+
+print(board.display_board())
+
+# print(board.get_possible_moves_for_piece(x=2, y=1))
+
+print("possible moves\n")
+for b in board.returnPossibleMoves(forOpponent=True):
+    print(f"shape b: y:{len(b)} x:{(len(b[0]))}")
+    
+    print(Board(b).display_board())
+
+
+
+#test 8
+print("\n\ntest8\n")
+board = Board([
+                [ 0,  0,  0,  0,  0,  0,  0,  0],
+                [ 0,  0,  0,  0,  0,  0,  0,  0],
+               [ 0,  0,  0,  0,  0,  0,  0,  0],
+                [ 0,  0,  0,  0,  1,  0,  0,  0],
+                [ 0,  0,  0,  -2,  0,  0,  0,  0],
+               [ 0,  0,  1,  0,  0,  0,  0,  0],
+               [ 0,  0,  0,  0,  0,  0,  0,  0],
+                [ 0,  0,  0,  0,  0,  0,  0,  0]
+            ])
+
+print(board.display_board())
+
+# print(board.get_possible_moves_for_piece(x=2, y=1))
+
+print("possible moves\n")
+for b in board.returnPossibleMoves(forOpponent=True):
+    print(f"shape b: y:{len(b)} x:{(len(b[0]))}")
+    
+    print(Board(b).display_board())
