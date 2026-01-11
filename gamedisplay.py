@@ -27,6 +27,7 @@ GOLD = (255, 200, 0)     # opponent king
 BLUE = (30, 80, 200)     # my normal
 CYAN = (80, 200, 255)    # my king
 HIGHLIGHT = (0, 255, 0)
+CAPTURE_HIGHLIGHT = (255, 0, 0)  # Red highlight for captures
 
 board_obj: Board = Board()
 selected = None
@@ -43,12 +44,25 @@ def apply_move(move, y, x):
 
     # capture
     if move["type"] == "capture":
-        cy, cx = move["capture"]
-        board_obj.board[cy][cx] = 0
+        for cy, cx in  move["captures"]: 
+        
+            board_obj.board[cy][cx] = 0
 
     # promotion
     if move["promote"]:
         board_obj.board[ny][nx] = 2
+
+
+def check_any_captures_available():
+    """Check if any of the player's pieces can capture."""
+    for y in range(8):
+        for x in range(8):
+            if board_obj.board[y][x] in (1, 2):  # Player's pieces
+                moves = board_obj.get_possible_moves_for_piece(y, x)
+                for move in moves:
+                    if move['type'] == 'capture':
+                        return True
+    return False
 
 
 # =============== Drawing ===============
@@ -75,7 +89,9 @@ def draw_board():
     # highlight legal move destinations
     for mv in legal_moves:
         ny, nx = mv['to']
-        pygame.draw.rect(screen, HIGHLIGHT,
+        # Use red highlight for captures, green for normal moves
+        highlight_color = CAPTURE_HIGHLIGHT if mv['type'] == 'capture' else HIGHLIGHT
+        pygame.draw.rect(screen, highlight_color,
                          (nx*TILE+20, ny*TILE+20, TILE-40, TILE-40), 3)
 
 
@@ -89,12 +105,18 @@ def coords_from_mouse(pos):
 def ai_opponent_minimax():
     board_obj.flipSides()
 
-    best_board = minimax_possiblemove(board_obj, -1000, 1000, depth=4, returnBoard=True)
+    best_board = minimax_possiblemove(board_obj, -10000, 10000, depth=6, returnBoard=True)
 
+    if best_board is None:
+        print("AI has no moves!")
+        board_obj.flipSides()
+        return False
+    
     print(f"best_board type: {type(best_board)}")
     board_obj.board = best_board
 
     board_obj.flipSides()
+    return True
 
 
 # =============== AI ===============
@@ -103,10 +125,11 @@ def ai_random_move():
 
     # temporarily flip sides so AI sees pieces as (1,2)
     board_obj.flipSides()
-    moves = board_obj.returnPossibleMoves()
+    _, moves = board_obj.returnPossibleMoves()
     # moves is list of boards, but we need individual piece moves
 
-    board_obj.board = random.choice(moves)
+    if moves:
+        board_obj.board = random.choice(moves)
 
     board_obj.flipSides()
 
@@ -128,10 +151,21 @@ while running:
             y, x = coords_from_mouse(event.pos)
             piece = board_obj.board[y][x]
 
+            # Check if any captures are available
+            any_captures = check_any_captures_available()
+
             # Select piece
             if piece in (1,2):
                 selected = (y, x)
                 legal_moves = board_obj.get_possible_moves_for_piece(y, x)
+                
+                # FORCED CAPTURE RULE: If any piece can capture, only show capture moves
+                if any_captures:
+                    legal_moves = [mv for mv in legal_moves if mv['type'] == 'capture']
+                    # If this piece has no captures, don't select it
+                    if not legal_moves:
+                        selected = None
+                        legal_moves = []
 
             # Make move
             elif selected:
@@ -147,8 +181,12 @@ while running:
     # AI MOVE
     if not player_turn:
         pygame.time.delay(300)
-        # ai_random_move()
-        ai_opponent_minimax()
+        
+        success = ai_opponent_minimax()
+        
+        if not success:
+            print("Player wins! AI has no moves.")
+        
         player_turn = True
 
     draw_board()
