@@ -8,6 +8,7 @@
 #  0 - empty
 
 class Board():
+    
     def __init__(self, board=None):
         if board is None:
             board = [
@@ -67,48 +68,79 @@ class Board():
                 row_str += f"{symbols[self.board[r][c]]:2} "
             print(row_str)
 
-    # @property
     def estimateAdvantage(self):
         """
-        Estimate the advantage accordint to the board provided
+        Estimate the advantage according to the board provided.
+        Enhanced evaluation with positional bonuses.
         """
-        score : int = 0
+        score = 0.0
+        
         for y in range(len(self.board)):
             for x in range(len(self.board[y])):
-                score += self.board[y][x]
-
+                piece = self.board[y][x]
+                
+                if piece == 0:
+                    continue
+                    
+                # Material value
+                if abs(piece) == 1:
+                    piece_value = 3.0
+                else:  # King
+                    piece_value = 5.0
+                
+                # Positional bonuses
+                positional_bonus = 0.0
+                
+                # Reward advancement for regular pieces
+                if piece == 1:  # My regular piece
+                    positional_bonus += (7 - y) * 0.1  # Closer to promotion
+                elif piece == -1:  # Opponent regular piece
+                    positional_bonus += y * 0.1  # Their advancement
+                
+                # Center control bonus
+                center_distance = abs(3.5 - x) + abs(3.5 - y)
+                positional_bonus += (7 - center_distance) * 0.05
+                
+                # Back row protection bonus for pieces
+                if piece == 1 and y == 7:
+                    positional_bonus += 0.3
+                elif piece == -1 and y == 0:
+                    positional_bonus += 0.3
+                
+                # Apply value with sign
+                if piece > 0:
+                    score += piece_value + positional_bonus
+                else:
+                    score -= piece_value + positional_bonus
+        
         return score
     
+
     def get_possible_moves_for_piece(self, y, x):
         """
-        Return a list of possible moves for the piece at (y, x).
-        Works for:
-        - Current player:  1 (man),  2 (king)
-        - Opponent:       -1 (man), -2 (king)
+        Return all possible moves for the piece at (y, x).
+        Supports multi-capture with proper "must capture" rule.
         """
 
         rows = len(self.board)
-        cols = len(self.board[0]) if rows else 0
+        cols = len(self.board[0])
 
-        def inside(yy, xx):
-            return 0 <= yy < rows and 0 <= xx < cols
+        def inside(r, c):
+            return 0 <= r < rows and 0 <= c < cols
 
         piece = self.board[y][x]
         if piece == 0:
             return []
 
-        moves = []
-
         is_king = abs(piece) == 2
         is_current_player = piece > 0
 
-        # Direction of normal men
         if is_current_player:
-            forward_dirs = [(-1, -1), (-1, 1)]   # move up
+            forward_dirs = [(-1, -1), (-1, 1)]
             promotion_row = 0
             enemy_pieces = (-1, -2)
         else:
-            forward_dirs = [(1, -1), (1, 1)]     # move down
+            forward_dirs = [(1, -1), (1, 1)]
             promotion_row = rows - 1
             enemy_pieces = (1, 2)
 
@@ -116,151 +148,84 @@ class Board():
         if is_king:
             directions = forward_dirs + [(-d[0], d[1]) for d in forward_dirs]
 
+        # -----------------------------
+        # MULTI-CAPTURE SEARCH
+        # -----------------------------
+        capture_sequences = []
+
+        def dfs(board, cy, cx, path, captured):
+            """DFS to find all possible capture sequences from current position."""
+            found_further = False
+
+            for dy, dx in directions:
+                by, bx = cy + dy, cx + dx
+                jy, jx = cy + 2 * dy, cx + 2 * dx
+
+                if inside(by, bx) and inside(jy, jx):
+                    # Check if we can capture (and haven't captured this piece already)
+                    if board[by][bx] in enemy_pieces and board[jy][jx] == 0 and (by, bx) not in captured:
+                        found_further = True
+
+                        # Create new board state after this capture
+                        new_board = [row[:] for row in board]
+                        new_board[jy][jx] = new_board[cy][cx]
+                        new_board[cy][cx] = 0
+                        new_board[by][bx] = 0
+
+                        # Continue searching for more captures
+                        dfs(
+                            new_board,
+                            jy,
+                            jx,
+                            path + [(jy, jx)],
+                            captured + [(by, bx)]
+                        )
+
+            # If no further captures found and we've captured at least one piece
+            if not found_further and captured:
+                promote = (not is_king and cy == promotion_row)
+                capture_sequences.append({
+                    'to': (cy, cx),
+                    'type': 'capture',
+                    'path': path,
+                    'captures': captured,
+                    'promote': promote
+                })
+
+        dfs(self.board, y, x, [(y, x)], [])
+
+        # If any capture exists → must take captures (forced capture rule)
+        if capture_sequences:
+            return capture_sequences
+
+        # -----------------------------
+        # NORMAL MOVES (only if no capture possible)
+        # -----------------------------
+        moves = []
         for dy, dx in directions:
             ny, nx = y + dy, x + dx
-
-            # --- normal move ---
             if inside(ny, nx) and self.board[ny][nx] == 0:
                 promote = (not is_king and ny == promotion_row)
                 moves.append({
                     'to': (ny, nx),
                     'type': 'move',
-                    'capture': None,
+                    'captures': [],
                     'promote': promote
                 })
-
-            # --- capture ---
-            by, bx = ny, nx
-            jy, jx = y + 2 * dy, x + 2 * dx
-
-            if inside(by, bx) and inside(jy, jx):
-                if self.board[by][bx] in enemy_pieces and self.board[jy][jx] == 0:
-                    promote = (not is_king and jy == promotion_row)
-                    moves.append({
-                        'to': (jy, jx),
-                        'type': 'capture',
-                        'capture': (by, bx),
-                        'promote': promote
-                    })
 
         return moves
 
 
-    # def get_possible_moves_for_piece(self,  y, x):
-    #     """
-    #     Return a list of possible moves for the piece at (y, x) on `board`.
-    #     Each move is a dict:
-    #         {
-    #             'to': (ny, nx),
-    #             'type': 'move' or 'capture',
-    #             'capture': (by, bx) or None,
-    #             'promote': True/False
-    #         }
-    #     Works for normal pieces (1) which move "up" (y-1) and kings (2) which move in all four diagonals.
-    #     Assumes current player's pieces are 1 (man) and 2 (king); opponents are -1 (man) and -2 (king).
-    #     """
-    #     rows = len(self.board)
-    #     cols = len(self.board[0]) if rows else 0
-
-    #     def inside(yy, xx):
-    #         return 0 <= yy < rows and 0 <= xx < cols
-
-    #     piece = self.board[y][x]
-    #     if piece not in (1, 2):
-    #         return []  # nothing to do for empty or opponent pieces
-
-    #     # Directions: normal pieces move upward (toward y-1), kings in all 4 diagonals
-    #     directions_normal = [(-1, -1), (-1, 1)]
-    #     directions_king   = directions_normal + [(1, -1), (1, 1)]
-    #     dirs = directions_king if piece == 2 else directions_normal
-
-    #     moves = []
-    #     for dy, dx in dirs:
-    #         ny, nx = y + dy, x + dx
-
-    #         # --- normal (non-capturing) move ---
-    #         if inside(ny, nx) and self.board[ny][nx] == 0:
-    #             promote = (piece == 1 and ny == 0)  # promote if a normal piece reaches top row
-    #             moves.append({
-    #                 'to': (ny, nx),
-    #                 'type': 'move',
-    #                 'capture': None,
-    #                 'promote': promote
-    #             })
-
-    #         # --- capture (jump) ---
-    #         by, bx = ny, nx                    # intermediate square (must contain opponent)
-    #         jy, jx = y + 2*dy, x + 2*dx       # landing square after the jump
-
-    #         if inside(by, bx) and inside(jy, jx):
-    #             if self.board[by][bx] in (-1, -2) and self.board[jy][jx] == 0:
-    #                 promote = (piece == 1 and jy == 0)
-    #                 moves.append({
-    #                     'to': (jy, jx),
-    #                     'type': 'capture',
-    #                     'capture': (by, bx),
-    #                     'promote': promote
-    #                 })
-
-    #     return moves
-    
-
-
-
-    # def returnPossibleMoves(self, forOpponent = False):
-    #     """
-    #     Return a list of boards (deep copies) after every legal move for the
-    #     current player (pieces 1 and 2). Captures are included (single-captures).
-    #     The helper get_possible_moves_for_piece returns capture info and returnPossibleMoves
-    #     applies captures (removes the jumped piece) when creating the new board.
-    #     """
-
-        
-    #     result_boards = []
-    #     board = self.board
-
-    #     # Helper: clone board deeply
-    #     def clone_board(b):
-    #         return [row[:] for row in b]
-
-    #     rows = len(board)
-    #     cols = len(board[0]) if rows else 0
-
-    #     for y in range(rows):
-    #         for x in range(cols):
-    #             piece = board[y][x]
-
-    #             if piece not in (1, 2):
-    #                 continue
-
-    #             possible_moves = self.get_possible_moves_for_piece( y, x)
-
-    #             for move in possible_moves:
-    #                 ny, nx = move['to']
-    #                 new_board = clone_board(board)
-
-    #                 # Move piece
-    #                 new_board[ny][nx] = new_board[y][x]
-    #                 new_board[y][x] = 0
-
-    #                 # If it's a capture, remove the opponent
-    #                 if move['type'] == 'capture' and move['capture'] is not None:
-    #                     by, bx = move['capture']
-    #                     new_board[by][bx] = 0
-
-    #                 # Handle promotion
-    #                 if move['promote']:
-    #                     new_board[ny][nx] = 2
-
-    #                 result_boards.append(new_board)
-
-    #     return result_boards
-
     def returnPossibleMoves(self, forOpponent=False):
         """
         Return all possible boards after legal moves.
+        Implements the "must capture" rule: if any capture is available,
+        only capture moves are returned.
+        
         forOpponent=False → current player (1, 2)
         forOpponent=True  → opponent (-1, -2)
+        
+        Returns: (capture_detected, list_of_boards)
         """
 
         result_boards = []
@@ -273,6 +238,8 @@ class Board():
         cols = len(board[0]) if rows else 0
 
         valid_pieces = (-1, -2) if forOpponent else (1, 2)
+        capture_boards = []
+        normal_boards = []
 
         for y in range(rows):
             for x in range(cols):
@@ -285,43 +252,78 @@ class Board():
                     ny, nx = move['to']
                     new_board = clone_board(board)
 
+                    # Move piece to destination
                     new_board[ny][nx] = new_board[y][x]
                     new_board[y][x] = 0
 
+                    # Remove all captured pieces
                     if move['type'] == 'capture':
-                        by, bx = move['capture']
-                        new_board[by][bx] = 0
+                        for by, bx in move['captures']:
+                            new_board[by][bx] = 0
 
+                    # Handle promotion
                     if move['promote']:
                         new_board[ny][nx] = 2 if new_board[ny][nx] > 0 else -2
 
-                    result_boards.append(new_board)
+                    # Separate captures from normal moves
+                    if move['type'] == 'capture':
+                        capture_boards.append(new_board)
+                    else:
+                        normal_boards.append(new_board)
 
-        return result_boards
+        # Must capture rule: if any captures exist, only return captures
+        if capture_boards:
+            return (True, capture_boards)
+        else:
+            return (False, normal_boards)
+
+
+def minimax_possiblemove(
+    board: Board,
+    alpha: int,
+    beta: int,
+    isMaximizing: bool = True,
+    depth: int = 5,
+    returnBoard: bool = False
+):
+    """
+    Minimax with alpha-beta pruning.
     
-
-def minimax_possiblemove( board: Board ,  alpha: int, beta: int, isMaximizing = True, depth: int = 5, returnBoard = False):
-    assert( not (isMaximizing == False and returnBoard == True))
+    CRITICAL FIX: Multi-captures are already handled by get_possible_moves_for_piece()
+    which returns complete multi-capture sequences. Each board in returnPossibleMoves
+    represents a COMPLETE turn (including all forced multi-captures).
+    
+    Therefore, we ALWAYS switch players after applying a move from returnPossibleMoves.
+    """
+    assert(not (isMaximizing == False and returnBoard == True))
     
     if depth == 0:
-        # print(type(board))
         score = board.estimateAdvantage()
         if not isMaximizing:
             score *= -1
         return score
     
-    
-    if isMaximizing :
-        maxeval = -1000
+    if isMaximizing:
+        maxeval = -10000
         best_board = None
 
-        childboards = board.returnPossibleMoves()
+        _, childboards = board.returnPossibleMoves()
+        
+        # If no moves available, this is a loss
+        if not childboards:
+            return -10000
+        
         for childb in childboards:
+            child_obj = Board(childb)
             
-            eval = minimax_possiblemove(Board(childb), alpha, beta, isMaximizing=False, depth=depth-1)
-            if returnBoard:
-                print(eval)
-            # maxeval = max(maxeval, eval)
+            # ALWAYS switch to opponent after a complete move
+            # (multi-captures are already complete in the board state)
+            eval = minimax_possiblemove(
+                child_obj, alpha, beta, 
+                isMaximizing=False,  # Always switch to minimizing
+                depth=depth-1
+            )
+            
             if eval > maxeval:
                 maxeval = eval
                 best_board = childb
@@ -330,70 +332,130 @@ def minimax_possiblemove( board: Board ,  alpha: int, beta: int, isMaximizing = 
             if beta <= alpha:
                 break
 
-        if returnBoard:
-            print(f"maxeval: {maxeval}")
         return best_board if returnBoard else maxeval
     
-    else:
-        mineval = 1000
-        # board.flipSides()
-        childboards  = board.returnPossibleMoves(forOpponent=True)
+    else:  # Minimizing (opponent's turn)
+        mineval = 10000
+        
+        _, childboards = board.returnPossibleMoves(forOpponent=True)
+        
+        # If no moves available, this is a win for us
+        if not childboards:
+            return 10000
+        
         for childb in childboards:
-            childb = Board(childb)
-            # childb.flipSides()
-
-            eval = minimax_possiblemove(childb, alpha, beta, isMaximizing=True, depth=depth-1)
+            child_obj = Board(childb)
+            
+            # ALWAYS switch to maximizing player after opponent's complete move
+            eval = minimax_possiblemove(
+                child_obj, alpha, beta, 
+                isMaximizing=True,  # Always switch to maximizing
+                depth=depth-1
+            )
+            
             mineval = min(mineval, eval)
             beta = min(beta, eval)
             if beta <= alpha:
                 break
+                
         return mineval
 
-  
 
-    # def minimax_possiblemove(self, depth: int = 5, curr_depth: int = 0, board:Board = None):
+def minimax_debug(
+    board: Board,
+    alpha: int,
+    beta: int,
+    isMaximizing: bool = True,
+    depth: int = 5,
+    indent: int = 0,
+    returnBoard: bool = False
+):
+    """Debug version of minimax that prints the search tree."""
+    prefix = "│   " * indent
+    player = "MAX" if isMaximizing else "MIN"
 
-    #     if board == None:
-    #         boards: list[Board] = self.returnPossibleMoves()
-    #         #sort them according to score
-    #         boards = sorted(boards, key=lambda obj: obj.estimateAdvantage, reverse=True)
-    #         highestEstimation = boards[0].estimateAdvantage
+    print(f"{prefix}▶ {player} | depth={depth} | α={alpha} β={beta}")
+    
+    if depth == 0:
+        score = board.estimateAdvantage()
+        if not isMaximizing:
+            score *= -1
+        print(f"{prefix}✔ Leaf score = {score}")
+        return score
 
-    #         for b in boards:
+    if isMaximizing:
+        maxeval = -10000
+        best_board = None
 
-    #             if b.estimateAdvantage != highestEstimation:
-    #                 break
+        _, childboards = board.returnPossibleMoves()
 
-    #             b.minimax_possiblemove(
-    #                 depth=depth, 
-    #                 curr_depth = curr_depth + 1,
-    #                 board = b
-    #             )
+        if not childboards:
+            print(f"{prefix}✘ No moves - LOSS")
+            return -10000
 
-                
+        print(f"{prefix}Found {len(childboards)} moves")
 
+        for i, childb in enumerate(childboards):
+            print(f"{prefix}─ Move {i+1}/{len(childboards)}")
+            child_obj = Board(childb)
 
-    #     elif curr_depth != depth:
-    #         boards: list[Board] = board.returnPossibleMoves()
-    #         boards = sorted(boards, key=lambda obj: obj.estimateAdvantage, reverse=True)
-    #         highestEstimation = boards[0].estimateAdvantage
+            eval = minimax_debug(
+                child_obj,
+                alpha,
+                beta,
+                isMaximizing=False,
+                depth=depth - 1,
+                indent=indent + 1
+            )
 
-    #         for b in boards:
+            print(f"{prefix}  Eval = {eval}")
 
-    #             if b.estimateAdvantage != highestEstimation:
-    #                 break
+            if eval > maxeval:
+                maxeval = eval
+                best_board = childb
 
-    #             b.minimax_possiblemove(
-    #                 depth=depth, 
-    #                 curr_depth = curr_depth + 1,
-    #                 board = b
-    #             )
+            alpha = max(alpha, eval)
+            print(f"{prefix}  Updated α={alpha}")
 
+            if beta <= alpha:
+                print(f"{prefix}✂ PRUNE (β ≤ α)")
+                break
 
+        print(f"{prefix}◀ MAX returns {maxeval}")
+        return best_board if returnBoard else maxeval
 
+    else:
+        mineval = 10000
 
+        _, childboards = board.returnPossibleMoves(forOpponent=True)
 
-             
+        if not childboards:
+            print(f"{prefix}✘ No moves - WIN")
+            return 10000
 
+        print(f"{prefix}Found {len(childboards)} opponent moves")
 
-        
+        for i, childb in enumerate(childboards):
+            print(f"{prefix}─ Opponent move {i+1}/{len(childboards)}")
+            child_obj = Board(childb)
+
+            eval = minimax_debug(
+                child_obj,
+                alpha,
+                beta,
+                isMaximizing=True,
+                depth=depth - 1,
+                indent=indent + 1
+            )
+
+            mineval = min(mineval, eval)
+            beta = min(beta, eval)
+
+            print(f"{prefix}  Updated β={beta}")
+
+            if beta <= alpha:
+                print(f"{prefix}✂ PRUNE (β ≤ α)")
+                break
+
+        print(f"{prefix}◀ MIN returns {mineval}")
+        return mineval
