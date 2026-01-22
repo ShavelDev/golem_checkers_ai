@@ -299,8 +299,8 @@ def minimax_possiblemove(
     
     if depth == 0:
         score = board.estimateAdvantage()
-        if not isMaximizing:
-            score *= -1
+        # if not isMaximizing:
+        #     score *= -1
         return score
     
     if isMaximizing:
