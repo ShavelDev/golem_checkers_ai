@@ -6,8 +6,12 @@
 #  1 - my piece
 #  2 - my king
 #  0 - empty
-
+import torch
+import numpy as np
+from model.model import FlexibleNN
 class Board():
+
+    _model = None
     
     def __init__(self, board=None):
         if board is None:
@@ -68,51 +72,68 @@ class Board():
                 row_str += f"{symbols[self.board[r][c]]:2} "
             print(row_str)
 
-    def estimateAdvantage(self):
+    def estimateAdvantage(self, use_ai = True):
         """
         Estimate the advantage according to the board provided.
         Enhanced evaluation with positional bonuses.
         """
         score = 0.0
-        
-        for y in range(len(self.board)):
-            for x in range(len(self.board[y])):
-                piece = self.board[y][x]
-                
-                if piece == 0:
-                    continue
+        if not use_ai:
+            for y in range(len(self.board)):
+                for x in range(len(self.board[y])):
+                    piece = self.board[y][x]
                     
-                # Material value
-                if abs(piece) == 1:
-                    piece_value = 3.0
-                else:  # King
-                    piece_value = 5.0
-                
-                # Positional bonuses
-                positional_bonus = 0.0
-                
-                # Reward advancement for regular pieces
-                if piece == 1:  # My regular piece
-                    positional_bonus += (7 - y) * 0.1  # Closer to promotion
-                elif piece == -1:  # Opponent regular piece
-                    positional_bonus += y * 0.1  # Their advancement
-                
-                # Center control bonus
-                center_distance = abs(3.5 - x) + abs(3.5 - y)
-                positional_bonus += (7 - center_distance) * 0.05
-                
-                # Back row protection bonus for pieces
-                if piece == 1 and y == 7:
-                    positional_bonus += 0.3
-                elif piece == -1 and y == 0:
-                    positional_bonus += 0.3
-                
-                # Apply value with sign
-                if piece > 0:
-                    score += piece_value + positional_bonus
+                    if piece == 0:
+                        continue
+                        
+                    # Material value
+                    if abs(piece) == 1:
+                        piece_value = 3.0
+                    else:  # King
+                        piece_value = 5.0
+                    
+                    # Positional bonuses
+                    positional_bonus = 0.0
+                    
+                    # Reward advancement for regular pieces
+                    if piece == 1:  # My regular piece
+                        positional_bonus += (7 - y) * 0.1  # Closer to promotion
+                    elif piece == -1:  # Opponent regular piece
+                        positional_bonus += y * 0.1  # Their advancement
+                    
+                    # Center control bonus
+                    center_distance = abs(3.5 - x) + abs(3.5 - y)
+                    positional_bonus += (7 - center_distance) * 0.05
+                    
+                    # Back row protection bonus for pieces
+                    if piece == 1 and y == 7:
+                        positional_bonus += 0.3
+                    elif piece == -1 and y == 0:
+                        positional_bonus += 0.3
+                    
+                    # Apply value with sign
+                    if piece > 0:
+                        score += piece_value + positional_bonus
+                    else:
+                        score -= piece_value + positional_bonus
+        else:
+
+            
+            if Board._model is None:  # Check class variable
+                Board._model = FlexibleNN([32, 64, 32, 1])
+                checkpoint = torch.load('/Users/norbert/Projects/golem/golem_checkers_ai/model/checkpoints/checkpoint_epoch_100.pth', map_location='cpu')
+                if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+                    self._model.load_state_dict(checkpoint['model_state_dict'])
                 else:
-                    score -= piece_value + positional_bonus
-        
+                    self._model.load_state_dict(checkpoint)
+                self._model.eval()
+            
+            squeezed = np.array(self.squeeze())
+            board_flat = torch.FloatTensor(squeezed.reshape(1, -1))
+            
+            with torch.no_grad():
+                score = self._model(board_flat).item()
+            
         return score
     
 

@@ -105,7 +105,7 @@ def coords_from_mouse(pos):
 def ai_opponent_minimax():
     board_obj.flipSides()
 
-    best_board = minimax_possiblemove(board_obj, -10000, 10000, depth=6, returnBoard=True)
+    best_board = minimax_possiblemove(board_obj, -10000, 10000, depth=5, returnBoard=True)
 
     if best_board is None:
         print("AI has no moves!")
