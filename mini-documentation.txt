@@ -1,0 +1,57 @@
+Celem projektu było zaimplementowanie algorytmu decyzyjnego min-max i przetestowanie
+jego skuteczności w grze z róznymi głębokościami przeszukiwania
+
+
+Główny plik z logiką planszy i najwazniejszą clasą Board
+To w nim jest równiez zaimplentowany sam minmax
+
+./checkers_types.py 
+
+
+Dodatkowo zostało stworzony plik umozliwiajacy gre z botem z srodowiskiem gui
+
+./gamedisplay.py
+
+
+Generowanie gier to testów jak i treningu sieci neuronowej odpowiada skrypt:
+
+./gamegenerator.py
+    -funkcja generujaca w main (generator.generate_games) ma dodane parametry ustalające losowość gry takie jak szansa na losowy ruch
+    i ilość losowych ruchów na początku gry (tak aby gry się nie powtarzały)
+
+
+Zliczenie wygenerowanych gier i policzenie procentu wygranych:
+
+countResults.py
+
+
+
+
+
+Zadanie dodatkowe z dodaniem sieci neruonowej jako sposób estymacji planszy:
+
+Przygotowanie danych do treningu: 
+
+Po wygenerowaniu plikow gier za pomocą gamegenerator.py trzeba je odpowiednio przetworzyc i storzyć jeden
+plik z znormalizowanymi labelami
+
+pipeline przygotowania wyglada tak (nie jest to czyste rozwiązanie ale niestety zabrakło czasu na 
+przygotowanie czystszego :( )
+
+./training_games/createTrainingData.py - zamiana wielu plikow pkl na jeden plik treningowy
+./training_data/utility_small_scripts/addNormalizedLabel.py
+./training_data/utility_small_scripts/checktype.py
+
+
+wszystkie pliki związane z naszym percepronem mozna znaleźć w folderze ./model
+
+./model/model.py - plik nasza pytorchowa implementacja prostego perceptronu z dostosowalną ilością
+neuronów i warstw
+
+./model/train.py - plik odpowiedzalny za przeprowadzenie treningu
+
+./model/visualise.py - plik z wizualizujący wynik treningu
+
+
+
+
